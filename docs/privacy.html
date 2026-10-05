@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GRMC Invoice Privacy</title>
+<style>
+  :root { --fg:#1f2328; --muted:#59636e; --bg:#ffffff; --link:#0969da; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#e6edf3; --muted:#9198a1; --bg:#0d1117; --link:#4493f8; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:640px; margin:0 auto; padding:48px 16px; }
+  h1 { font-size:1.6rem; margin:0 0 16px; }
+  h2 { font-size:1.1rem; margin:24px 0 8px; }
+  p, li { margin:0 0 12px; }
+  a { color:var(--link); }
+  footer { color:var(--muted); font-size:.9rem; margin-top:32px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Privacy policy</h1>
+  <p>Effective October 5, 2026. GRMC Invoice is a personal tool used only by its owner, with the owner's own Google account.</p>
+  <h2>What it accesses</h2>
+  <ul>
+    <li><strong>Google Sheets (read-only):</strong> the work schedule spreadsheet, to find the owner's assigned shifts.</li>
+    <li><strong>Gmail (compose and read-only):</strong> to create an invoice draft in the owner's mailbox, and to check whether a draft for the same pay period already exists. It does not send email.</li>
+  </ul>
+  <h2>How data is used and stored</h2>
+  <p>Data is used only to produce the owner's invoice. The OAuth token is stored as an encrypted secret in the owner's private repository's automation settings. Generated invoice files are kept as private workflow artifacts for 14 days. Nothing is sold, shared, or used for advertising, and no data is transferred to any third party except Google and GitHub as needed to run the tool.</p>
+  <h2>Google API Services User Data Policy</h2>
+  <p>Use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+  <h2>Revoking access</h2>
+  <p>Access can be removed at any time at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</p>
+  <footer><a href="index.html">GRMC Invoice home</a> · Maintained by <a href="https://github.com/jmday033">@jmday033</a>.</footer>
+</main>
+</body>
+</html>

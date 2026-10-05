@@ -1,0 +1,44 @@
+name: GRMC invoices
+on:
+  workflow_dispatch:
+    inputs:
+      ppe:
+        description: 'Closed pay period ending YYYY-MM-DD (blank = latest)'
+        required: false
+        type: string
+  schedule:
+    - cron: '17 1 * * 0'
+permissions:
+  contents: read
+concurrency:
+  group: grmc-invoices
+  cancel-in-progress: false
+jobs:
+  invoice:
+    if: vars.INVOICING_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Generate invoice and Gmail draft
+        env:
+          GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
+          SCHEDULE_ID: ${{ secrets.SCHEDULE_ID }}
+          INVOICE_TO: ${{ secrets.INVOICE_TO }}
+          PROVIDER_NAME: ${{ secrets.PROVIDER_NAME }}
+          PROVIDER_BADGE: ${{ secrets.PROVIDER_BADGE }}
+          SIGNOFF: ${{ secrets.SIGNOFF }}
+          TELE1_RATE: ${{ vars.TELE1_RATE }}
+          TELE2_RATE: ${{ vars.TELE2_RATE }}
+          PPE: ${{ inputs.ppe }}
+        run: |
+          if [ -n "$PPE" ]; then
+            python invoice.py --draft --ppe "$PPE"
+          else
+            python invoice.py --draft
+          fi
+      # No artifact upload: this repository is public, and run artifacts would expose each invoice.
+      # The PDF is attached to the Gmail draft for review.
