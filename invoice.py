@@ -144,10 +144,11 @@ def main():
     if a.draft:
         from googleapiclient.discovery import build
         gmail=build('gmail','v1',credentials=credentials(),cache_discovery=False)
-        key=f'<grmc-{end.isoformat()}@invoice.local>'
-        existing=gmail.users().messages().list(userId='me',q=f'in:anywhere rfc822msgid:{key}').execute()
-        if existing.get('messages'): print('Invoice already drafted or sent; skipped.'); return
-        msg=EmailMessage(); to=required_env('INVOICE_TO'); msg['To']=to; msg['Subject']=f'GRMC invoice PPE {end.isoformat()}'; msg['Message-ID']=key
+        subject=f'GRMC invoice PPE {end.isoformat()}'
+        # Gmail replaces a custom Message-ID on drafts, so look for an existing draft or sent invoice by its exact subject.
+        existing=gmail.users().messages().list(userId='me',q=f'in:anywhere subject:"{subject}"',includeSpamTrash=False).execute()
+        if existing.get('messages'): print(f'Invoice "{subject}" already drafted or sent; skipped.'); return
+        msg=EmailMessage(); to=required_env('INVOICE_TO'); msg['To']=to; msg['Subject']=subject
         greeting=to.split('@')[0].split('.')[0].title(); signoff=os.environ.get('SIGNOFF','').strip() or required_env('PROVIDER_NAME')
         msg.set_content(f'Hi {greeting},\n\nAttached is my invoice for this pay period.\n\nThank you,\n{signoff}\n\n[Review hours and signature before sending.]')
         msg.add_attachment(pdf.read_bytes(),maintype='application',subtype='pdf',filename=pdf.name)

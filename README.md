@@ -14,7 +14,7 @@ This repository is public. It contains no personal data, rates history, or crede
    - `PROVIDER_NAME`, `PROVIDER_BADGE` — shown on the PDF
    - `SIGNOFF` (optional) — email sign-off; defaults to `PROVIDER_NAME`
 4. Optional Actions **variables** `TELE1_RATE` / `TELE2_RATE` override the $75/hour default.
-5. Set the Actions **variable** `INVOICING_ENABLED=true`. This enables manual runs (Actions → GRMC invoices → Run workflow, optional PPE date) and the weekly schedule, Sunday 01:17 UTC, which prepares the latest **closed** fortnight. A Gmail Message-ID check prevents duplicate drafts for the same pay period.
+5. Set the Actions **variable** `INVOICING_ENABLED=true`. This enables manual runs (Actions → GRMC invoices → Run workflow, optional PPE date) and the weekly schedule, Sunday 01:17 UTC, which prepares the latest **closed** fortnight. Before drafting, it searches Gmail for a message with the exact subject `GRMC invoice PPE YYYY-MM-DD`; if a draft or sent copy exists, the run skips. Keep that subject when you send, and don't delete a draft you still want the automation to treat as done.
 
 ## Billing rules
 - Tele 1 (19:00–24:00): 5 hours. Tele 2 (00:00–07:00): 7 hours. Both $75/hour by default.
