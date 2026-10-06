@@ -1,0 +1,29 @@
+name: GRMC income projection
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '41 2 * * 0'   # weekly, after the schedule is usually updated
+permissions:
+  contents: read
+concurrency:
+  group: grmc-invoices
+  cancel-in-progress: false
+jobs:
+  project:
+    if: vars.INVOICING_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Project GRMC income into the tracker
+        env:
+          GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
+          SCHEDULE_ID: ${{ secrets.SCHEDULE_ID }}
+          TRACKER_ID: ${{ secrets.TRACKER_ID }}
+          PROJECTION_TAB: ${{ vars.PROJECTION_TAB }}
+          TELE1_RATE: ${{ vars.TELE1_RATE }}
+          TELE2_RATE: ${{ vars.TELE2_RATE }}
+        run: python project.py

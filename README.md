@@ -33,6 +33,9 @@ Writing to a sheet requires the full `spreadsheets` scope in `authorize.py`; Goo
 
 Each payment goes in the row with the latest **IMS pay-period end** before the pay date (for example, paid 09/25 → period ending 09/15), writing **IMS income** and **Confirmed?** = `Y`. A row that already has an amount is never overwritten; two payments matching one row stop for review. Each run looks back 60 days, so a missed run is caught next time. Amounts never appear in logs.
 
+## GRMC income projection
+`project.py` (workflow **GRMC income projection**, weekly on Sunday and on demand) runs the schedule parser over the pay period still open and every later one the schedule covers, stopping at the first month with no Tele block. It writes Tele 1/Tele 2 counts, hours and projected income per period to a `Projected income` tab in the tracker (override with `PROJECTION_TAB`), creating the tab if needed and replacing only its columns A:F. Columns G onward are free for your own notes, such as Castle (IMS) shifts.
+
 ## Schedule parser
 Reads `A1:BZ260` as unformatted values from every tab whose title contains a year in the period. Columns are found by header text in each month block: the row containing "Tele 1" and "Tele 2" sets those columns, and the first date cell to its right sets the month. The columns have moved between half-year tabs and are re-detected per block. A period whose months have no Tele block (for example, a tab not yet built) is an error rather than a silent zero-shift result. The source sheet is never edited.
 
