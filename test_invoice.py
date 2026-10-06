@@ -1,6 +1,6 @@
 import unittest
 from datetime import date
-from invoice import shifts, shifts_from_tabs, last_period, month_marker, header_layout
+from invoice import shifts, shifts_from_tabs, last_period, month_marker, header_layout, tracker_cells, col_letter
 
 # Column layouts seen in the live schedule (0-based): Tele 1, Tele 2, month marker.
 H1_2026 = (17, 18, 24)   # Jan-June 2026: R, S, Y
@@ -82,5 +82,32 @@ class InvoiceTests(unittest.TestCase):
     def test_header_needs_both_tele_columns(self):
         r = [''] * 30; r[18] = 'Tele 1 (7p-12a)'
         with self.assertRaises(ValueError): header_layout(r)
+
+def serial(d): return (d - date(1899, 12, 30)).days
+
+TRACKER_HEADER = ['Month', 'Pay period', 'GRMC pay-period end', 'GRMC income', 'Confirmed?', 'IMS pay-period end', 'IMS income', 'Confirmed?', 'Total income']
+
+class TrackerTests(unittest.TestCase):
+    def sheet(self):
+        return [['2026 1099 Income Goal Tracker'], [], ['Goal progress'], TRACKER_HEADER,
+                ['SEPTEMBER', 19, serial(date(2026, 9, 19)), 3675, 'N', serial(date(2026, 9, 30))],
+                ['OCTOBER', 20, serial(date(2026, 10, 3)), 4200, 'N'],
+                ['', 21, serial(date(2026, 10, 17)), '', '', serial(date(2026, 10, 31))]]
+
+    def test_finds_blank_row_by_header(self):
+        self.assertEqual(tracker_cells(self.sheet(), date(2026, 10, 17)), (7, 3, 4, '', ''))
+        self.assertEqual(col_letter(3) + col_letter(4), 'DE')
+
+    def test_reports_existing_amount(self):
+        row, _, _, income, conf = tracker_cells(self.sheet(), date(2026, 10, 3))
+        self.assertEqual((row, income, conf), (6, 4200, 'N'))
+
+    def test_uses_grmc_confirmed_not_ims(self):
+        header = ['IMS income', 'Confirmed?', 'GRMC pay-period end', 'GRMC income', 'Confirmed?']
+        r = tracker_cells([header, ['', '', serial(date(2026, 10, 17)), '', '']], date(2026, 10, 17))
+        self.assertEqual(r[2], 4)
+
+    def test_missing_row_returns_none(self):
+        self.assertIsNone(tracker_cells(self.sheet(), date(2027, 1, 9)))
 
 if __name__ == '__main__': unittest.main()

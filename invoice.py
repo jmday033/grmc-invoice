@@ -84,9 +84,13 @@ def shifts_from_tabs(tabs, start, end, rates):
         raise ValueError(f'Schedule has no Tele 1/Tele 2 block for {missing}; check tab titles and headers')
     return sorted(result, key=lambda x:(x['date'], x['shift']))
 
+_CREDS = None
 def credentials():
-    from google.oauth2.credentials import Credentials
-    return Credentials.from_authorized_user_info(json.loads(os.environ['GOOGLE_TOKEN_JSON']))
+    global _CREDS
+    if _CREDS is None:
+        from google.oauth2.credentials import Credentials
+        _CREDS = Credentials.from_authorized_user_info(json.loads(os.environ['GOOGLE_TOKEN_JSON']))
+    return _CREDS
 
 def make_pdf(rows, start, end, path, provider, badge):
     from reportlab.lib import colors
@@ -99,6 +103,55 @@ def make_pdf(rows, start, end, path, provider, badge):
     table = Table(data, colWidths=[85,115,55,85,95], repeatRows=1)
     table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.lightgrey),('GRID',(0,0),(-1,-1),.5,colors.grey),('PADDING',(0,0),(-1,-1),7)]))
     SimpleDocTemplate(str(path)).build([Paragraph('GRMC Hospitalist Invoice — DRAFT',styles['Title']),Paragraph(f'Provider: {provider} | Badge: {badge}<br/>Bill to: Guam Regional Medical City<br/>Invoice: GRMC-{end.isoformat()}<br/>Period: {start.isoformat()} through {end.isoformat()}<br/>Pay period ending: {end.isoformat()}',styles['Normal']),Spacer(1,16),table,Spacer(1,16),Paragraph('Review scheduled versus actual hours before sending. Provider signature/date: __________________',styles['Normal'])])
+
+def col_letter(i):
+    s = ''
+    i += 1
+    while i: i, r = divmod(i - 1, 26); s = chr(65 + r) + s
+    return s
+
+def tracker_cells(values, ppe):
+    """Locate the GRMC income and Confirmed? cells for the row whose 'GRMC pay-period end' equals ppe.
+    Returns (row_number, income_col, confirmed_col, income_value, confirmed_value) or None. Found by header text."""
+    for h, row in enumerate(values):
+        labels = [str(v).strip().lower() for v in row]
+        if 'grmc pay-period end' in labels and 'grmc income' in labels:
+            date_col = labels.index('grmc pay-period end'); income_col = labels.index('grmc income')
+            conf = [i for i, v in enumerate(labels) if v.startswith('confirmed') and i > income_col]
+            if not conf: raise ValueError('Tracker header has no Confirmed? column after GRMC income')
+            conf_col = conf[0]
+            for r, data in enumerate(values[h + 1:], start=h + 2):
+                data = list(data) + [''] * (max(date_col, income_col, conf_col) + 1 - len(data))
+                d = data[date_col]
+                if isinstance(d, (int, float)) and not isinstance(d, bool) and SHEETS_EPOCH + timedelta(days=int(d)) == ppe:
+                    return r, income_col, conf_col, data[income_col], data[conf_col]
+            return None
+    raise ValueError('Tracker tab has no "GRMC pay-period end" / "GRMC income" header')
+
+def update_tracker(creds, ppe, total):
+    """Record an invoiced (not yet paid) amount in the family cash-flow tracker. Never overwrites an existing entry.
+    Messages avoid amounts because Actions logs of a public repository are public."""
+    tracker_id = os.environ.get('TRACKER_ID', '').strip()
+    if not tracker_id: print('Tracker: TRACKER_ID not set; skipped.'); return
+    from googleapiclient.discovery import build
+    api = build('sheets', 'v4', credentials=creds, cache_discovery=False)
+    titles = [s['properties']['title'] for s in api.spreadsheets().get(spreadsheetId=tracker_id, fields='sheets.properties.title').execute()['sheets']]
+    wanted = os.environ.get('TRACKER_TAB', '').strip().lower() or 'goal 1099 income'
+    tabs = [t for t in titles if t.strip().lower() == wanted]
+    if not tabs: print('Tracker: tab not found; skipped.'); return
+    q = tabs[0].replace("'", "''")
+    values = api.spreadsheets().values().get(spreadsheetId=tracker_id, range=f"'{q}'!A1:Z200",
+        valueRenderOption='UNFORMATTED_VALUE', dateTimeRenderOption='SERIAL_NUMBER').execute().get('values', [])
+    cell = tracker_cells(values, ppe)
+    if cell is None: print(f'Tracker: no row for pay period ending {ppe}; skipped.'); return
+    row, income_col, conf_col, income, confirmed = cell
+    if str(income).strip() not in ('', '0', '0.0'):
+        print(f'Tracker: row for {ppe} already has an amount; left unchanged.'); return
+    data = [{'range': f"'{q}'!{col_letter(income_col)}{row}", 'values': [[float(total)]]}]
+    if str(confirmed).strip() == '':
+        data.append({'range': f"'{q}'!{col_letter(conf_col)}{row}", 'values': [['N']]})
+    api.spreadsheets().values().batchUpdate(spreadsheetId=tracker_id, body={'valueInputOption': 'USER_ENTERED', 'data': data}).execute()
+    print(f'Tracker: recorded pay period ending {ppe} as invoiced (Confirmed? = N).')
 
 def required_env(name):
     value=os.environ.get(name,'').strip()
@@ -147,12 +200,14 @@ def main():
         subject=f'GRMC invoice PPE {end.isoformat()}'
         # Gmail replaces a custom Message-ID on drafts, so look for an existing draft or sent invoice by its exact subject.
         existing=gmail.users().messages().list(userId='me',q=f'in:anywhere subject:"{subject}"',includeSpamTrash=False).execute()
-        if existing.get('messages'): print(f'Invoice "{subject}" already drafted or sent; skipped.'); return
-        msg=EmailMessage(); to=required_env('INVOICE_TO'); msg['To']=to; msg['Subject']=subject
-        greeting=to.split('@')[0].split('.')[0].title(); signoff=os.environ.get('SIGNOFF','').strip() or required_env('PROVIDER_NAME')
-        msg.set_content(f'Hi {greeting},\n\nAttached is my invoice for this pay period.\n\nThank you,\n{signoff}\n\n[Review hours and signature before sending.]')
-        msg.add_attachment(pdf.read_bytes(),maintype='application',subtype='pdf',filename=pdf.name)
-        gmail.users().drafts().create(userId='me',body={'message':{'raw':base64.urlsafe_b64encode(msg.as_bytes()).decode()}}).execute()
-        print('Gmail draft created; nothing sent.')
+        if existing.get('messages'): print(f'Invoice "{subject}" already drafted or sent; skipped.')
+        else:
+            msg=EmailMessage(); to=required_env('INVOICE_TO'); msg['To']=to; msg['Subject']=subject
+            greeting=to.split('@')[0].split('.')[0].title(); signoff=os.environ.get('SIGNOFF','').strip() or required_env('PROVIDER_NAME')
+            msg.set_content(f'Hi {greeting},\n\nAttached is my invoice for this pay period.\n\nThank you,\n{signoff}\n\n[Review hours and signature before sending.]')
+            msg.add_attachment(pdf.read_bytes(),maintype='application',subtype='pdf',filename=pdf.name)
+            gmail.users().drafts().create(userId='me',body={'message':{'raw':base64.urlsafe_b64encode(msg.as_bytes()).decode()}}).execute()
+            print('Gmail draft created; nothing sent.')
+        update_tracker(credentials(),end,sum(Decimal(r['amount']) for r in rows))
 
 if __name__=='__main__': main()

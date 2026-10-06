@@ -31,6 +31,7 @@ jobs:
           PROVIDER_NAME: ${{ secrets.PROVIDER_NAME }}
           PROVIDER_BADGE: ${{ secrets.PROVIDER_BADGE }}
           SIGNOFF: ${{ secrets.SIGNOFF }}
+          TRACKER_ID: ${{ secrets.TRACKER_ID }}
           TELE1_RATE: ${{ vars.TELE1_RATE }}
           TELE2_RATE: ${{ vars.TELE2_RATE }}
           PPE: ${{ inputs.ppe }}

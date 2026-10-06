@@ -13,6 +13,7 @@ This repository is public. It contains no personal data, rates history, or crede
    - `INVOICE_TO` — invoice recipient address
    - `PROVIDER_NAME`, `PROVIDER_BADGE` — shown on the PDF
    - `SIGNOFF` (optional) — email sign-off; defaults to `PROVIDER_NAME`
+   - `TRACKER_ID` (optional) — a cash-flow spreadsheet to record each invoice in (see below)
 4. Optional Actions **variables** `TELE1_RATE` / `TELE2_RATE` override the $75/hour default.
 5. Set the Actions **variable** `INVOICING_ENABLED=true`. This enables manual runs (Actions → GRMC invoices → Run workflow, optional PPE date) and the weekly schedule, Sunday 01:17 UTC, which prepares the latest **closed** fortnight. Before drafting, it searches Gmail for a message with the exact subject `GRMC invoice PPE YYYY-MM-DD`; if a draft or sent copy exists, the run skips. Keep that subject when you send, and don't delete a draft you still want the automation to treat as done.
 
@@ -21,6 +22,11 @@ This repository is public. It contains no personal data, rates history, or crede
 - Pay periods are 14 days, Sunday–Saturday, anchored on the period ending October 3, 2026. A period counts as closed once its ending Saturday has passed in Guam.
 - Each Tele 2 shift is billed on its schedule row's date, including nights with both Tele 1 and Tele 2.
 - No shifts means no invoice. Mixed or unrecognized assignments in a Tele cell, missing rates, and duplicate assignments stop the run for review.
+
+## Income tracker (optional)
+When `TRACKER_ID` is set, each run also opens that spreadsheet's `Goal 1099 Income` tab (override with the `TRACKER_TAB` variable), finds the row whose **GRMC pay-period end** equals the invoice's pay period, and writes the invoice total into **GRMC income** with **Confirmed?** = `N`. Change it to `Y` once paid. Columns are found by header text. A row that already has an amount is never overwritten, and nothing else in the sheet is touched. Run logs never print amounts, because Actions logs on a public repository are public.
+
+Writing to a sheet requires the full `spreadsheets` scope in `authorize.py`; Google offers no single-file Sheets scope.
 
 ## Schedule parser
 Reads `A1:BZ260` as unformatted values from every tab whose title contains a year in the period. Columns are found by header text in each month block: the row containing "Tele 1" and "Tele 2" sets those columns, and the first date cell to its right sets the month. The columns have moved between half-year tabs and are re-detected per block. A period whose months have no Tele block (for example, a tab not yet built) is an error rather than a silent zero-shift result. The source sheet is never edited.
