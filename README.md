@@ -28,11 +28,16 @@ When `TRACKER_ID` is set, each run also opens that spreadsheet's `Goal 1099 Inco
 
 Writing to a sheet requires the full `spreadsheets` scope in `authorize.py`; Google offers no single-file Sheets scope.
 
+## Castle income from Gusto
+`castle_income.py` (workflow **Castle income from Gusto**) records pay from Inpatient Medicine Services, LLC in the same tracker tab. Gusto has no API for the person being paid, so it reads Gusto's "you've been paid" emails, which give the pay date and amount. It runs on the 11th and 26th of each month at 08:23 Hawaii time, or manually (with an optional dry run), and needs only the existing `GOOGLE_TOKEN_JSON` and `TRACKER_ID` secrets and `INVOICING_ENABLED`.
+
+Each payment goes in the row with the latest **IMS pay-period end** before the pay date (for example, paid 09/25 → period ending 09/15), writing **IMS income** and **Confirmed?** = `Y`. A row that already has an amount is never overwritten; two payments matching one row stop for review. Each run looks back 60 days, so a missed run is caught next time. Amounts never appear in logs.
+
 ## Schedule parser
 Reads `A1:BZ260` as unformatted values from every tab whose title contains a year in the period. Columns are found by header text in each month block: the row containing "Tele 1" and "Tele 2" sets those columns, and the first date cell to its right sets the month. The columns have moved between half-year tabs and are re-detected per block. A period whose months have no Tele block (for example, a tab not yet built) is an error rather than a silent zero-shift result. The source sheet is never edited.
 
 ## Validation
-Run `python -m unittest -v`. Tests cover the 56-hour fortnight, month and year boundaries, header-based column detection across three layouts, Sheets serial dates, missing rates, mixed assignments, and fortnight selection.
+Run `python -m unittest -v`. Tests cover Gusto email parsing and IMS row matching, the 56-hour fortnight, month and year boundaries, header-based column detection across three layouts, Sheets serial dates, missing rates, mixed assignments, and fortnight selection.
 
 ## OAuth consent pages
 `docs/` holds the homepage and privacy policy that the Google consent screen links to, served by GitHub Pages.

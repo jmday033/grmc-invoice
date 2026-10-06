@@ -1,0 +1,36 @@
+name: Castle income from Gusto
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only report which tracker rows would change'
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    # Twice a month, the day after Gusto's usual ~10th and ~25th paydays. Each run looks back 60 days,
+    # so a late or missed run is caught next time; existing amounts are never overwritten.
+    - cron: '23 18 11,26 * *'
+permissions:
+  contents: read
+concurrency:
+  group: grmc-invoices
+  cancel-in-progress: false
+jobs:
+  castle:
+    if: vars.INVOICING_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Record Gusto payments in the income tracker
+        env:
+          GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
+          TRACKER_ID: ${{ secrets.TRACKER_ID }}
+          TRACKER_TAB: ${{ vars.TRACKER_TAB }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then python castle_income.py --dry-run; else python castle_income.py; fi
