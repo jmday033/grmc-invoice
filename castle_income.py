@@ -2,13 +2,14 @@
 
 Gusto offers no API to the person being paid, so the Gusto notification email is the source: it gives the pay date and
 amount. Each payment goes in the tracker row with the latest "IMS pay-period end" before the pay date, with
-Confirmed? = Y because the money has been paid. Existing amounts are never overwritten.
+Confirmed? = Y because the money has been paid. Confirmed rows are never changed; an unconfirmed projected
+amount is replaced by the paid amount.
 Logs never print amounts, because Actions logs on a public repository are public."""
 import argparse, base64, html, os, re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from invoice import SHEETS_EPOCH, col_letter, credentials
+from invoice import SHEETS_EPOCH, col_letter, credentials, plan_row_update
 
 EMPLOYER = 'Inpatient Medicine Services'
 GMAIL_QUERY = f'from:gustonoreply@gusto.com subject:"been paid" "{EMPLOYER}"'
@@ -112,12 +113,11 @@ def main():
         if row in claimed:
             print(f'Payment of {paid_on}: period ending {period_end} already matched another payment this run; skipped for review.'); continue
         claimed.add(row)
-        if str(income).strip() not in ('', '0', '0.0'):
-            print(f'Payment of {paid_on}: period ending {period_end} already has an amount; left unchanged.'); continue
-        data.append({'range': f"'{q}'!{col_letter(income_col)}{row}", 'values': [[float(amount)]]})
-        if str(confirmed).strip().upper() != 'Y':
-            data.append({'range': f"'{q}'!{col_letter(conf_col)}{row}", 'values': [['Y']]})
-        print(f'Payment of {paid_on}: {"would record" if a.dry_run else "recording"} in period ending {period_end} (Confirmed? = Y).')
+        writes, status = plan_row_update(income, confirmed, amount, paid=True)
+        if 'income' in writes: data.append({'range': f"'{q}'!{col_letter(income_col)}{row}", 'values': [[writes['income']]]})
+        if 'confirmed' in writes: data.append({'range': f"'{q}'!{col_letter(conf_col)}{row}", 'values': [[writes['confirmed']]]})
+        verb = 'would be' if a.dry_run else 'was'
+        print(f'Payment of {paid_on}, period ending {period_end}: {status}' + (f'; Confirmed? {verb} set to Y.' if writes else '.'))
     if data and not a.dry_run:
         api.spreadsheets().values().batchUpdate(spreadsheetId=tracker_id, body={'valueInputOption': 'USER_ENTERED', 'data': data}).execute()
 

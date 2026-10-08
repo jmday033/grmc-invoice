@@ -1,5 +1,6 @@
 import unittest
 from datetime import date
+from decimal import Decimal
 from invoice import shifts, shifts_from_tabs, last_period, month_marker, header_layout, tracker_cells, col_letter
 
 # Column layouts seen in the live schedule (0-based): Tele 1, Tele 2, month marker.
@@ -109,6 +110,30 @@ class TrackerTests(unittest.TestCase):
 
     def test_missing_row_returns_none(self):
         self.assertIsNone(tracker_cells(self.sheet(), date(2027, 1, 9)))
+
+class RowUpdateTests(unittest.TestCase):
+    def test_blank_row_recorded(self):
+        from invoice import plan_row_update
+        self.assertEqual(plan_row_update('', '', Decimal('4200'), paid=False), ({'income': 4200.0, 'confirmed': 'N'}, 'recorded'))
+
+    def test_projection_replaced_or_matched(self):
+        from invoice import plan_row_update
+        self.assertEqual(plan_row_update(5250, 'N', Decimal('4725'), paid=False)[0], {'income': 4725.0})
+        self.assertEqual(plan_row_update(4200, 'N', Decimal('4200'), paid=False), ({}, 'matches the projected amount'))
+
+    def test_paid_amount_confirms(self):
+        from invoice import plan_row_update
+        self.assertEqual(plan_row_update(1750, 'N', Decimal('1750'), paid=True)[0], {'confirmed': 'Y'})
+        self.assertEqual(plan_row_update(3500, 'N', Decimal('1750'), paid=True)[0], {'income': 1750.0, 'confirmed': 'Y'})
+
+    def test_confirmed_rows_never_change(self):
+        from invoice import plan_row_update
+        self.assertEqual(plan_row_update(3500, 'Y', Decimal('1'), paid=True)[0], {})
+        self.assertEqual(plan_row_update('', 'y', Decimal('1'), paid=False)[0], {})
+
+    def test_non_numeric_left_for_review(self):
+        from invoice import plan_row_update
+        self.assertEqual(plan_row_update('-', 'N', Decimal('1'), paid=True)[0], {})
 
 if __name__ == '__main__': unittest.main()
 
