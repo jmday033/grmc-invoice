@@ -1,7 +1,7 @@
 import unittest
 from datetime import date
 from decimal import Decimal
-from castle_income import parse_payment, ims_cells
+from castle_income import parse_payment, ims_cells, plausible_lag
 
 def serial(d): return (d - date(1899, 12, 30)).days
 
@@ -39,5 +39,19 @@ class RowTests(unittest.TestCase):
 
     def test_no_earlier_period(self):
         self.assertIsNone(ims_cells(sheet(), date(2026, 8, 1)))
+
+class LagTests(unittest.TestCase):
+    def test_usual_paydays_accepted(self):
+        self.assertTrue(plausible_lag(date(2026, 9, 25), date(2026, 9, 15)))
+        self.assertTrue(plausible_lag(date(2026, 10, 9), date(2026, 9, 30)))
+
+    def test_payday_that_slips_past_next_period_end_is_held(self):
+        # Paid 10/16 for the period ending 9/30: the nearest earlier end is 10/15, one day before.
+        self.assertEqual(ims_cells(sheet() + [['', 20, serial(date(2026, 10, 3)), '', '', serial(date(2026, 10, 15))]],
+                                   date(2026, 10, 16))[3], date(2026, 10, 15))
+        self.assertFalse(plausible_lag(date(2026, 10, 16), date(2026, 10, 15)))
+
+    def test_very_late_payment_is_held(self):
+        self.assertFalse(plausible_lag(date(2026, 11, 25), date(2026, 10, 31)))
 
 if __name__ == '__main__': unittest.main()

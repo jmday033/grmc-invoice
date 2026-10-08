@@ -111,3 +111,13 @@ class TrackerTests(unittest.TestCase):
         self.assertIsNone(tracker_cells(self.sheet(), date(2027, 1, 9)))
 
 if __name__ == '__main__': unittest.main()
+
+
+class RateTests(unittest.TestCase):
+    def test_rates_have_no_default(self):
+        from invoice import confirmed_rates
+        for env in ({}, {'TELE1_RATE': '75'}, {'TELE1_RATE': '75', 'TELE2_RATE': ''},
+                    {'TELE1_RATE': 'abc', 'TELE2_RATE': '75'}, {'TELE1_RATE': '0', 'TELE2_RATE': '75'}):
+            with self.assertRaises(SystemExit): confirmed_rates(env)
+        self.assertEqual(confirmed_rates({'TELE1_RATE': '80', 'TELE2_RATE': '82.50'}),
+                         {'tele1': '80', 'tele2': '82.50'})

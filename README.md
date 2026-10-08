@@ -14,11 +14,11 @@ This repository is public. It contains no personal data, rates history, or crede
    - `PROVIDER_NAME`, `PROVIDER_BADGE` — shown on the PDF
    - `SIGNOFF` (optional) — email sign-off; defaults to `PROVIDER_NAME`
    - `TRACKER_ID` (optional) — a cash-flow spreadsheet to record each invoice in (see below)
-4. Optional Actions **variables** `TELE1_RATE` / `TELE2_RATE` override the $75/hour default.
+4. **Required** Actions **variables** `TELE1_RATE` and `TELE2_RATE`: the confirmed hourly rates. There is no default; a missing or invalid rate stops the run, so a rate change is never billed at an old rate.
 5. Set the Actions **variable** `INVOICING_ENABLED=true`. This enables manual runs (Actions → GRMC invoices → Run workflow, optional PPE date) and the weekly schedule, Sunday 01:17 UTC, which prepares the latest **closed** fortnight. Before drafting, it searches Gmail for a message with the exact subject `GRMC invoice PPE YYYY-MM-DD`; if a draft or sent copy exists, the run skips. Keep that subject when you send, and don't delete a draft you still want the automation to treat as done.
 
 ## Billing rules
-- Tele 1 (19:00–24:00): 5 hours. Tele 2 (00:00–07:00): 7 hours. Both $75/hour by default.
+- Tele 1 (19:00–24:00): 5 hours. Tele 2 (00:00–07:00): 7 hours. Hourly rates come from the `TELE1_RATE` / `TELE2_RATE` variables.
 - Pay periods are 14 days, Sunday–Saturday, anchored on the period ending October 3, 2026. A period counts as closed once its ending Saturday has passed in Guam.
 - Each Tele 2 shift is billed on its schedule row's date, including nights with both Tele 1 and Tele 2.
 - No shifts means no invoice. Mixed or unrecognized assignments in a Tele cell, missing rates, and duplicate assignments stop the run for review.
@@ -31,7 +31,7 @@ Writing to a sheet requires the full `spreadsheets` scope in `authorize.py`; Goo
 ## Castle income from Gusto
 `castle_income.py` (workflow **Castle income from Gusto**) records pay from Inpatient Medicine Services, LLC in the same tracker tab. Gusto has no API for the person being paid, so it reads Gusto's "you've been paid" emails, which give the pay date and amount. It runs on the 11th and 26th of each month at 08:23 Hawaii time, or manually (with an optional dry run), and needs only the existing `GOOGLE_TOKEN_JSON` and `TRACKER_ID` secrets and `INVOICING_ENABLED`.
 
-Each payment goes in the row with the latest **IMS pay-period end** before the pay date (for example, paid 09/25 → period ending 09/15), writing **IMS income** and **Confirmed?** = `Y`. A row that already has an amount is never overwritten; two payments matching one row stop for review. Each run looks back 60 days, so a missed run is caught next time. Amounts never appear in logs.
+Each payment goes in the row with the latest **IMS pay-period end** before the pay date (for example, paid 09/25 → period ending 09/15), writing **IMS income** and **Confirmed?** = `Y`. If that period ended fewer than 3 or more than 20 days before the pay date, the payment is held for review instead of being guessed into a row (for example, a payday that slips past the next period end). A row that already has an amount is never overwritten; two payments matching one row stop for review. Each run looks back 60 days, so a missed run is caught next time. Amounts never appear in logs.
 
 ## GRMC income projection
 `project.py` (workflow **GRMC income projection**, weekly on Sunday and on demand) runs the schedule parser over the pay period still open and every later one the schedule covers, stopping at the first month with no Tele block. It writes Tele 1/Tele 2 counts, hours and projected income per period to a `Projected income` tab in the tracker (override with `PROJECTION_TAB`), creating the tab if needed and replacing only its columns A:F. Columns G onward are free for your own notes, such as Castle (IMS) shifts.
@@ -40,7 +40,13 @@ Each payment goes in the row with the latest **IMS pay-period end** before the p
 Reads `A1:BZ260` as unformatted values from every tab whose title contains a year in the period. Columns are found by header text in each month block: the row containing "Tele 1" and "Tele 2" sets those columns, and the first date cell to its right sets the month. The columns have moved between half-year tabs and are re-detected per block. A period whose months have no Tele block (for example, a tab not yet built) is an error rather than a silent zero-shift result. The source sheet is never edited.
 
 ## Validation
-Run `python -m unittest -v`. Tests cover Gusto email parsing and IMS row matching, the 56-hour fortnight, month and year boundaries, header-based column detection across three layouts, Sheets serial dates, missing rates, mixed assignments, and fortnight selection.
+Run `python -m unittest -v`. The **Tests** workflow runs them on every push and pull request. Tests cover Gusto email parsing and IMS row matching, the 56-hour fortnight, month and year boundaries, header-based column detection across three layouts, Sheets serial dates, missing rates, mixed assignments, and fortnight selection.
+
+## Keeping it running safely
+- **Keep-alive:** GitHub disables scheduled workflows in a public repository after 60 days without activity. The **Keep schedules enabled** workflow re-enables every workflow on the 1st of each month, including itself, so the schedules don't silently stop.
+- **Locked dependencies:** `requirements.txt` pins every package, including indirect ones, to an exact version and hash, and workflows install with `--require-hashes`. Edit `requirements.in`, then regenerate with `uv pip compile --generate-hashes --python-version 3.12 -o requirements.txt requirements.in`.
+- **Pinned actions:** workflow steps reference exact commit SHAs, not movable tags.
+- **Failures:** GitHub emails the account that last edited a workflow's schedule when a scheduled run fails. A failed run, such as one caused by an expired Google token, means nothing was drafted or recorded that cycle.
 
 ## OAuth consent pages
 `docs/` holds the homepage and privacy policy that the Google consent screen links to, served by GitHub Pages.
