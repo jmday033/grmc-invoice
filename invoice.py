@@ -128,8 +128,28 @@ def tracker_cells(values, ppe):
             return None
     raise ValueError('Tracker tab has no "GRMC pay-period end" / "GRMC income" header')
 
+def plan_row_update(income, confirmed, amount, paid):
+    """Decide how to record an amount in a tracker row. Returns ({'income': x, 'confirmed': y}, status).
+    Rows marked Confirmed? = Y are never changed. An unconfirmed (N or blank) amount is a projection, so
+    the real amount replaces it; a paid amount also sets Confirmed? = Y. Non-numeric cells are left for review."""
+    if str(confirmed).strip().upper() == 'Y':
+        return {}, 'already confirmed; left unchanged'
+    raw = str(income).strip()
+    writes = {}
+    if raw in ('', '0', '0.0'):
+        writes['income'] = float(amount); status = 'recorded'
+    else:
+        try: current = Decimal(raw.replace('$', '').replace(',', ''))
+        except Exception: return {}, 'has a non-numeric amount; left for review'
+        if current == Decimal(amount): status = 'matches the projected amount'
+        else: writes['income'] = float(amount); status = 'replaced the projected amount'
+    if paid: writes['confirmed'] = 'Y'
+    elif str(confirmed).strip() == '': writes['confirmed'] = 'N'
+    return writes, status
+
 def update_tracker(creds, ppe, total):
-    """Record an invoiced (not yet paid) amount in the family cash-flow tracker. Never overwrites an existing entry.
+    """Record an invoiced (not yet paid) amount in the family cash-flow tracker. Confirmed rows are never changed;
+    an unconfirmed projected amount is replaced by the invoiced total.
     Messages avoid amounts because Actions logs of a public repository are public."""
     tracker_id = os.environ.get('TRACKER_ID', '').strip()
     if not tracker_id: print('Tracker: TRACKER_ID not set; skipped.'); return
@@ -145,13 +165,13 @@ def update_tracker(creds, ppe, total):
     cell = tracker_cells(values, ppe)
     if cell is None: print(f'Tracker: no row for pay period ending {ppe}; skipped.'); return
     row, income_col, conf_col, income, confirmed = cell
-    if str(income).strip() not in ('', '0', '0.0'):
-        print(f'Tracker: row for {ppe} already has an amount; left unchanged.'); return
-    data = [{'range': f"'{q}'!{col_letter(income_col)}{row}", 'values': [[float(total)]]}]
-    if str(confirmed).strip() == '':
-        data.append({'range': f"'{q}'!{col_letter(conf_col)}{row}", 'values': [['N']]})
-    api.spreadsheets().values().batchUpdate(spreadsheetId=tracker_id, body={'valueInputOption': 'USER_ENTERED', 'data': data}).execute()
-    print(f'Tracker: recorded pay period ending {ppe} as invoiced (Confirmed? = N).')
+    writes, status = plan_row_update(income, confirmed, total, paid=False)
+    data = []
+    if 'income' in writes: data.append({'range': f"'{q}'!{col_letter(income_col)}{row}", 'values': [[writes['income']]]})
+    if 'confirmed' in writes: data.append({'range': f"'{q}'!{col_letter(conf_col)}{row}", 'values': [[writes['confirmed']]]})
+    if data:
+        api.spreadsheets().values().batchUpdate(spreadsheetId=tracker_id, body={'valueInputOption': 'USER_ENTERED', 'data': data}).execute()
+    print(f'Tracker: pay period ending {ppe}: invoiced total {status}.')
 
 def confirmed_rates(env=None):
     """Hourly rates must be set explicitly (Actions variables TELE1_RATE and TELE2_RATE).
