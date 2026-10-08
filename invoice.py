@@ -153,6 +153,20 @@ def update_tracker(creds, ppe, total):
     api.spreadsheets().values().batchUpdate(spreadsheetId=tracker_id, body={'valueInputOption': 'USER_ENTERED', 'data': data}).execute()
     print(f'Tracker: recorded pay period ending {ppe} as invoiced (Confirmed? = N).')
 
+def confirmed_rates(env=None):
+    """Hourly rates must be set explicitly (Actions variables TELE1_RATE and TELE2_RATE).
+    There is no default, so a rate change can never be billed silently at an old rate."""
+    env = os.environ if env is None else env
+    rates = {}
+    for kind, name in (('tele1', 'TELE1_RATE'), ('tele2', 'TELE2_RATE')):
+        raw = (env.get(name) or '').strip()
+        if not raw: raise SystemExit(f'Missing confirmed rate {name}; set it as a GitHub Actions variable')
+        try: value = Decimal(raw)
+        except Exception: raise SystemExit(f'{name} is not a number')
+        if not value.is_finite() or value <= 0: raise SystemExit(f'{name} must be a positive amount')
+        rates[kind] = raw
+    return rates
+
 def required_env(name):
     value=os.environ.get(name,'').strip()
     if not value: raise SystemExit(f'Missing required setting {name} (set it as a GitHub Actions secret)')
@@ -182,7 +196,7 @@ def main():
     if (end-ANCHOR).days % 14: raise ValueError('PPE is not on the confirmed fortnightly cycle')
     if end >= today: raise ValueError('Pay period has not closed in Guam')
     start=end-timedelta(days=13)
-    rates={'tele2':(os.environ.get('TELE2_RATE') or '75'),'tele1':os.environ.get('TELE1_RATE') or '75'}
+    rates=confirmed_rates()
     if a.fixture:
         data=json.loads(Path(a.fixture).read_text())
         tabs=data['tabs'] if isinstance(data,dict) else [data]

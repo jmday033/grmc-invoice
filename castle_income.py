@@ -13,6 +13,14 @@ from invoice import SHEETS_EPOCH, col_letter, credentials
 EMPLOYER = 'Inpatient Medicine Services'
 GMAIL_QUERY = f'from:gustonoreply@gusto.com subject:"been paid" "{EMPLOYER}"'
 
+# IMS pays about ten days after each period ends (1st-15th paid ~25th; 16th-month end paid ~10th).
+# A payment whose nearest earlier period end falls outside this window is held for review instead of
+# being guessed into a row, e.g. a payday that slips past the next period end.
+PAY_LAG_DAYS = (3, 20)
+
+def plausible_lag(paid_on, period_end):
+    return PAY_LAG_DAYS[0] <= (paid_on - period_end).days <= PAY_LAG_DAYS[1]
+
 def serial_date(v):
     if isinstance(v, (int, float)) and not isinstance(v, bool) and 40000 <= v <= 60000:
         return SHEETS_EPOCH + timedelta(days=int(v))
@@ -99,6 +107,8 @@ def main():
         cell = ims_cells(values, paid_on)
         if cell is None: print(f'Payment of {paid_on}: no IMS pay-period end before it; skipped.'); continue
         row, income_col, conf_col, period_end, income, confirmed = cell
+        if not plausible_lag(paid_on, period_end):
+            print(f'Payment of {paid_on}: nearest period end {period_end} is outside the usual pay lag; skipped for review.'); continue
         if row in claimed:
             print(f'Payment of {paid_on}: period ending {period_end} already matched another payment this run; skipped for review.'); continue
         claimed.add(row)

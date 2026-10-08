@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from invoice import ANCHOR, credentials, fetch_tabs, shifts_from_tabs
+from invoice import ANCHOR, confirmed_rates, credentials, fetch_tabs, shifts_from_tabs
 
 HEADER = ['GRMC pay-period end', 'Tele 1 shifts', 'Tele 2 shifts', 'Hours', 'Projected GRMC income', 'Updated']
 
@@ -28,7 +28,7 @@ def project(tabs, first_end, rates, max_periods=27):
 def main():
     today = datetime.now(ZoneInfo('Pacific/Guam')).date()
     first_end = ANCHOR + timedelta(days=-(-(today - ANCHOR).days // 14) * 14)  # the period still open today
-    rates = {'tele1': os.environ.get('TELE1_RATE') or '75', 'tele2': os.environ.get('TELE2_RATE') or '75'}
+    rates = confirmed_rates()
     tabs = fetch_tabs(first_end - timedelta(days=13), date(today.year + 1, 12, 31))
     rows = project(tabs, first_end, rates)
     if not rows: print('Schedule has no open pay periods yet; nothing projected.'); return
