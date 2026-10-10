@@ -28,3 +28,8 @@ Anything committed, printed in an Actions log, or written in a pull request is v
 - Work on a branch and open a pull request; do not push to `main` directly. Merging to `main` changes what the scheduled runs do.
 - Commit messages say what changed and why. Never "update".
 - American English spelling.
+
+## Repository skills
+- [Workflow review](.claude/skills/workflow-review/SKILL.md): consistency checks, regression review and end-to-end verification for relevant changes.
+- [invoice-reconciliation](.claude/skills/invoice-reconciliation/SKILL.md): domain-specific audit and evidence requirements.
+Use these when the task matches their descriptions. They reference the existing rules; they do not replace them or authorize production actions.
