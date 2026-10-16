@@ -1,6 +1,6 @@
 # GRMC invoice preparation
 
-Reads a shared hospitalist schedule in Google Sheets, selects the provider's Tele 1 / Tele 2 assignments for a closed two-week pay period, builds an invoice PDF, and creates a Gmail draft with it attached. It **never sends email**; every draft is reviewed and sent by hand. The PDF is a draft layout, not a replica of any signed form.
+Reads a shared hospitalist schedule in Google Sheets, selects the provider's Tele 1 / Tele 2 assignments for a closed two-week pay period, builds an invoice PDF in GRMC's "TIMESHEET (LIP) Independent Contractors" layout, and creates a Gmail draft with it attached. It **never sends email**; every draft is reviewed and sent by hand. The PDF is a draft layout, not a replica of any signed form.
 
 This repository is public. It contains no personal data, rates history, or credentials: identity, recipient, and source spreadsheet come from GitHub Actions secrets, and run artifacts are not uploaded.
 
@@ -11,7 +11,8 @@ This repository is public. It contains no personal data, rates history, or crede
    - `GOOGLE_TOKEN_JSON` — contents of `token.json`
    - `SCHEDULE_ID` — the schedule spreadsheet ID
    - `INVOICE_TO` — invoice recipient address
-   - `PROVIDER_NAME`, `PROVIDER_BADGE` — shown on the PDF
+   - `PROVIDER_NAME`, `PROVIDER_BADGE`, `PROVIDER_ADDRESS`, `PROVIDER_PHONE` — shown under Provider Information on the PDF (required)
+   - `BILL_TO_ADDRESS`, `BILL_TO_PHONE` (optional) — shown under Bill To; left blank if unset
    - `SIGNOFF` (optional) — email sign-off; defaults to `PROVIDER_NAME`
    - `TRACKER_ID` (optional) — a cash-flow spreadsheet to record each invoice in (see below)
 4. **Required** Actions **variables** `TELE1_RATE` and `TELE2_RATE`: the confirmed hourly rates. There is no default; a missing or invalid rate stops the run, so a rate change is never billed at an old rate.
@@ -21,6 +22,7 @@ This repository is public. It contains no personal data, rates history, or crede
 - Tele 1 (19:00–24:00): 5 hours. Tele 2 (00:00–07:00): 7 hours. Hourly rates come from the `TELE1_RATE` / `TELE2_RATE` variables.
 - Pay periods are 14 days, Sunday–Saturday, anchored on the period ending October 3, 2026. A period counts as closed once its ending Saturday has passed in Guam.
 - Each Tele 2 shift is billed on its schedule row's date, including nights with both Tele 1 and Tele 2.
+- The PDF lists every day of the period, Sunday through Saturday, as Day / Date / Time / Hours / Rate / Total. Days without a shift stay blank; a night with both Tele 1 and Tele 2 gets two lines. Times read `7PM - 12AM (Guam)` and `12AM - 7AM (Guam)`.
 - No shifts means no invoice. Mixed or unrecognized assignments in a Tele cell, missing rates, and duplicate assignments stop the run for review.
 
 ## Income tracker (optional)
