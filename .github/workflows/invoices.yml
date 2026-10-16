@@ -30,6 +30,10 @@ jobs:
           INVOICE_TO: ${{ secrets.INVOICE_TO }}
           PROVIDER_NAME: ${{ secrets.PROVIDER_NAME }}
           PROVIDER_BADGE: ${{ secrets.PROVIDER_BADGE }}
+          PROVIDER_ADDRESS: ${{ secrets.PROVIDER_ADDRESS }}
+          PROVIDER_PHONE: ${{ secrets.PROVIDER_PHONE }}
+          BILL_TO_ADDRESS: ${{ secrets.BILL_TO_ADDRESS }}
+          BILL_TO_PHONE: ${{ secrets.BILL_TO_PHONE }}
           SIGNOFF: ${{ secrets.SIGNOFF }}
           TRACKER_ID: ${{ secrets.TRACKER_ID }}
           TELE1_RATE: ${{ vars.TELE1_RATE }}

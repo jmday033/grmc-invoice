@@ -146,3 +146,34 @@ class RateTests(unittest.TestCase):
             with self.assertRaises(SystemExit): confirmed_rates(env)
         self.assertEqual(confirmed_rates({'TELE1_RATE': '80', 'TELE2_RATE': '82.50'}),
                          {'tele1': '80', 'tele2': '82.50'})
+
+
+class TimesheetTests(unittest.TestCase):
+    def rows(self):
+        return [dict(date='2030-01-07', shift='tele2', time='00:00-07:00', hours=7, rate='10', amount='70'),
+                dict(date='2030-01-08', shift='tele1', time='19:00-24:00', hours=5, rate='12.50', amount='62.50'),
+                dict(date='2030-01-08', shift='tele2', time='00:00-07:00', hours=7, rate='10', amount='70')]
+
+    def test_every_day_listed_sunday_to_saturday(self):
+        from invoice import timesheet_rows
+        lines = timesheet_rows(self.rows(), date(2030, 1, 6), date(2030, 1, 19))
+        self.assertEqual(len(lines), 15)  # 14 days, one with two shifts
+        self.assertEqual(lines[0][:2], ['Sunday', '1/6/2030'])
+        self.assertEqual(lines[0][2:], ['', '', '', ''])
+        self.assertEqual(lines[-1][:2], ['Saturday', '1/19/2030'])
+
+    def test_shift_labels_and_rates(self):
+        from invoice import timesheet_rows
+        lines = timesheet_rows(self.rows(), date(2030, 1, 6), date(2030, 1, 19))
+        self.assertEqual(lines[1], ['Monday', '1/7/2030', '12AM - 7AM (Guam)', '7', '$10/HR', '$70.00'])
+        self.assertEqual(lines[2][2:], ['7PM - 12AM (Guam)', '5', '$12.50/HR', '$62.50'])
+        self.assertEqual(lines[3][2], '12AM - 7AM (Guam)')
+
+    def test_pdf_builds(self):
+        import tempfile, os
+        from invoice import make_pdf
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, 'x.pdf')
+            make_pdf(self.rows(), date(2030, 1, 6), date(2030, 1, 19), p, 'Test Person', 'TEST01',
+                     '1 Fake St', '000-000-0000', '2 Fake Rd', '')
+            self.assertGreater(os.path.getsize(p), 1000)

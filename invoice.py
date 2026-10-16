@@ -92,17 +92,83 @@ def credentials():
         _CREDS = Credentials.from_authorized_user_info(json.loads(os.environ['GOOGLE_TOKEN_JSON']))
     return _CREDS
 
-def make_pdf(rows, start, end, path, provider, badge):
+SHIFT_LABELS = {'tele1': '7PM - 12AM (Guam)', 'tele2': '12AM - 7AM (Guam)'}
+
+def _us_date(d):
+    return f'{d.month}/{d.day}/{d.year}'
+
+def _rate_label(rate):
+    rate = Decimal(rate)
+    return f"${rate:,.0f}/HR" if rate == rate.to_integral() else f"${rate:,.2f}/HR"
+
+def timesheet_rows(rows, start, end):
+    """One line per day of the period, Sunday through Saturday; a day with both Tele shifts gets two lines."""
+    by_day = {}
+    for r in rows: by_day.setdefault(r['date'], []).append(r)
+    lines = []
+    for i in range((end - start).days + 1):
+        day = start + timedelta(days=i)
+        worked = sorted(by_day.get(day.isoformat(), []), key=lambda r: r['shift'])
+        if not worked:
+            lines.append([day.strftime('%A'), _us_date(day), '', '', '', ''])
+        for r in worked:
+            lines.append([day.strftime('%A'), _us_date(day), SHIFT_LABELS[r['shift']], str(r['hours']),
+                          _rate_label(r['rate']), f"${Decimal(r['amount']):,.2f}"])
+    return lines
+
+def make_pdf(rows, start, end, path, provider, badge, address='', phone='', bill_to_address='', bill_to_phone=''):
+    """GRMC 'TIMESHEET (LIP) Independent Contractors' layout: every day of the period is listed."""
     from reportlab.lib import colors
-    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import ParagraphStyle
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-    styles = getSampleStyleSheet()
-    data = [['Date','Shift (Guam)','Hours','Rate','Amount']]
-    for r in rows: data.append([r['date'],r['time'],str(r['hours']),f"${Decimal(r['rate']):,.2f}",f"${Decimal(r['amount']):,.2f}"])
-    data.append(['TOTAL','',str(sum(r['hours'] for r in rows)),'',f"${sum(Decimal(r['amount']) for r in rows):,.2f}"])
-    table = Table(data, colWidths=[85,115,55,85,95], repeatRows=1)
-    table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.lightgrey),('GRID',(0,0),(-1,-1),.5,colors.grey),('PADDING',(0,0),(-1,-1),7)]))
-    SimpleDocTemplate(str(path)).build([Paragraph('GRMC Hospitalist Invoice — DRAFT',styles['Title']),Paragraph(f'Provider: {provider} | Badge: {badge}<br/>Bill to: Guam Regional Medical City<br/>Invoice: GRMC-{end.isoformat()}<br/>Period: {start.isoformat()} through {end.isoformat()}<br/>Pay period ending: {end.isoformat()}',styles['Normal']),Spacer(1,16),table,Spacer(1,16),Paragraph('Review scheduled versus actual hours before sending. Provider signature/date: __________________',styles['Normal'])])
+    blue, grey_blue, line = colors.HexColor('#336699'), colors.HexColor('#B7CDD3'), colors.HexColor('#336699')
+    bold = ParagraphStyle('b', fontName='Helvetica-Bold', fontSize=6.5, leading=8)
+    title = ParagraphStyle('t', fontName='Helvetica-Bold', fontSize=10, leading=12, alignment=1)
+    sub = ParagraphStyle('s', fontName='Helvetica-Bold', fontSize=7, leading=9, alignment=1)
+    head = ParagraphStyle('h', fontName='Helvetica-Bold', fontSize=9, leading=11, textColor=blue)
+    draft = ParagraphStyle('d', fontName='Helvetica-Bold', fontSize=7.5, textColor=blue, alignment=2)
+    W = 540
+    top = Table([[Paragraph('TIMESHEET (LIP)', title), Paragraph('DRAFT', draft)],
+                 [Paragraph('Independent Contractors', sub), '']], colWidths=[W - 80, 80])
+    top.setStyle(TableStyle([('LEFTPADDING', (0, 0), (0, -1), 80), ('VALIGN', (0, 0), (-1, -1), 'BOTTOM')]))
+    info = [[Paragraph('PROVIDER INFORMATION', head), '', '', Paragraph('BILL TO', head), ''],
+            ['Provider Name', provider.upper(), '', 'Vendor', 'Guam Regional Medical City'],
+            ['Mailing Address', address.upper(), '', 'Mailing Address', bill_to_address],
+            ['Telephone', phone, '', 'Telephone', bill_to_phone],
+            ['Badge ID No.', badge, '', '', '']]
+    info_t = Table(info, colWidths=[82, 210, 40, 82, 126])
+    info_t.setStyle(TableStyle([
+        ('FONT', (0, 0), (-1, -1), 'Helvetica-Bold', 7.5), ('ALIGN', (1, 1), (1, -1), 'CENTER'),
+        ('SPAN', (0, 0), (1, 0)), ('SPAN', (3, 0), (4, 0)), ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+        ('LINEBELOW', (1, 1), (1, 4), .6, line), ('LINEBELOW', (4, 1), (4, 3), .6, line),
+        ('TOPPADDING', (0, 0), (-1, -1), 8), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
+    inv = Table([['Invoice', f'GRMC-{end.isoformat()}', '', 'Pay Period Ending', _us_date(end)]],
+                colWidths=[82, 210, 40, 82, 126])
+    inv.setStyle(TableStyle([('FONT', (0, 0), (-1, -1), 'Helvetica-Bold', 7.5),
+                             ('LINEBELOW', (0, 0), (1, 0), .6, colors.black), ('LINEBELOW', (3, 0), (4, 0), .6, colors.black)]))
+    data = [['Day', 'Date', 'Time', Paragraph('<para alignment="center"><font color="white">No. of<br/>Hours<br/>Worked</font></para>', bold), 'Rate', 'Total']]
+    data += timesheet_rows(rows, start, end)
+    hours = sum(Decimal(str(r['hours'])) for r in rows)
+    data.append(['Total Hours', '', '', f'{hours:,.2f}', 'Sub Total', f"${sum(Decimal(r['amount']) for r in rows):,.2f}"])
+    n = len(data)
+    grid = Table(data, colWidths=[72, 72, 140, 50, 90, 116], rowHeights=[30] + [19.5] * (n - 2) + [17])
+    grid.setStyle(TableStyle([
+        ('FONT', (0, 0), (-1, -1), 'Helvetica-Bold', 7), ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BACKGROUND', (0, 0), (-1, 0), blue), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('GRID', (0, 0), (-1, -1), .6, colors.black),
+        ('SPAN', (0, -1), (2, -1)), ('ALIGN', (0, -1), (2, -1), 'RIGHT'),
+        ('BACKGROUND', (0, -1), (2, -1), grey_blue), ('BACKGROUND', (4, -1), (4, -1), grey_blue),
+        ('FONTSIZE', (3, -1), (3, -1), 9), ('FONTSIZE', (5, -1), (5, -1), 9)]))
+    sig = Table([['', '', ''], ['', 'PROVIDER SIGNATURE', 'DATE'], ['', '', ''], ['', 'APPROVED BY SIGNATURE', 'DATE']],
+                colWidths=[110, 210, 220], rowHeights=[26, 12, 26, 12])
+    sig.setStyle(TableStyle([('FONT', (0, 0), (-1, -1), 'Helvetica', 6.5),
+                             ('LINEABOVE', (1, 1), (2, 1), .6, colors.grey), ('LINEABOVE', (1, 3), (2, 3), .6, colors.grey)]))
+    note = ParagraphStyle('n', fontName='Helvetica', fontSize=6.5)
+    SimpleDocTemplate(str(path), pagesize=letter, leftMargin=36, rightMargin=36, topMargin=72, bottomMargin=36).build(
+        [top, Spacer(1, 10), info_t, Spacer(1, 12), inv, Spacer(1, 8), grid, Spacer(1, 14), sig, Spacer(1, 18),
+         Paragraph('DRAFT - Review scheduled versus actual hours before sending.', note)])
 
 def col_letter(i):
     s = ''
@@ -225,7 +291,9 @@ def main():
     rows=shifts_from_tabs(tabs,start,end,rates)
     if not rows: print('No shifts in closed period; no invoice created.'); return
     out=Path('output'); out.mkdir(exist_ok=True)
-    pdf=out/f'GRMC-{end.isoformat()}.pdf'; make_pdf(rows,start,end,pdf,required_env('PROVIDER_NAME'),required_env('PROVIDER_BADGE'))
+    pdf=out/f'GRMC-{end.isoformat()}.pdf'; make_pdf(rows,start,end,pdf,required_env('PROVIDER_NAME'),required_env('PROVIDER_BADGE'),
+                required_env('PROVIDER_ADDRESS'),required_env('PROVIDER_PHONE'),
+                os.environ.get('BILL_TO_ADDRESS','').strip(),os.environ.get('BILL_TO_PHONE','').strip())
     with (out/'hours.csv').open('w') as f:
         w=csv.DictWriter(f,fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)
     if a.draft:
