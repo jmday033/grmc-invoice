@@ -92,7 +92,7 @@ def credentials():
         _CREDS = Credentials.from_authorized_user_info(json.loads(os.environ['GOOGLE_TOKEN_JSON']))
     return _CREDS
 
-SHIFT_LABELS = {'tele1': '7PM - 12AM (Guam)', 'tele2': '12AM - 7AM (Guam)'}
+SHIFT_LABELS = {'tele1': '7PM-12AM', 'tele2': '12AM-7AM'}
 
 def _us_date(d):
     return f'{d.month}/{d.day}/{d.year}'
@@ -117,7 +117,8 @@ def timesheet_rows(rows, start, end):
     return lines
 
 def make_pdf(rows, start, end, path, provider, badge, address='', phone='', bill_to_address='', bill_to_phone=''):
-    """GRMC 'TIMESHEET (LIP) Independent Contractors' layout: every day of the period is listed."""
+    """GRMC 'TIMESHEET (LIP) Independent Contractors' form: every day of the period is listed. The invoice
+    field and both signature lines are left blank; the provider signs and dates it before sending."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.styles import ParagraphStyle
@@ -127,14 +128,11 @@ def make_pdf(rows, start, end, path, provider, badge, address='', phone='', bill
     title = ParagraphStyle('t', fontName='Helvetica-Bold', fontSize=10, leading=12, alignment=1)
     sub = ParagraphStyle('s', fontName='Helvetica-Bold', fontSize=7, leading=9, alignment=1)
     head = ParagraphStyle('h', fontName='Helvetica-Bold', fontSize=9, leading=11, textColor=blue)
-    draft = ParagraphStyle('d', fontName='Helvetica-Bold', fontSize=7.5, textColor=blue, alignment=2)
     W = 540
-    top = Table([[Paragraph('TIMESHEET (LIP)', title), Paragraph('DRAFT', draft)],
-                 [Paragraph('Independent Contractors', sub), '']], colWidths=[W - 80, 80])
-    top.setStyle(TableStyle([('LEFTPADDING', (0, 0), (0, -1), 80), ('VALIGN', (0, 0), (-1, -1), 'BOTTOM')]))
+    top = Table([[Paragraph('TIMESHEET (LIP)', title)], [Paragraph('Independent Contractors', sub)]], colWidths=[W])
     info = [[Paragraph('PROVIDER INFORMATION', head), '', '', Paragraph('BILL TO', head), ''],
             ['Provider Name', provider.upper(), '', 'Vendor', 'Guam Regional Medical City'],
-            ['Mailing Address', address.upper(), '', 'Mailing Address', bill_to_address],
+            ['Mailing Address', address, '', 'Mailing Address', bill_to_address],
             ['Telephone', phone, '', 'Telephone', bill_to_phone],
             ['Badge ID No.', badge, '', '', '']]
     info_t = Table(info, colWidths=[82, 210, 40, 82, 126])
@@ -144,7 +142,7 @@ def make_pdf(rows, start, end, path, provider, badge, address='', phone='', bill
         ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
         ('LINEBELOW', (1, 1), (1, 4), .6, line), ('LINEBELOW', (4, 1), (4, 3), .6, line),
         ('TOPPADDING', (0, 0), (-1, -1), 8), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
-    inv = Table([['Invoice', f'GRMC-{end.isoformat()}', '', 'Pay Period Ending', _us_date(end)]],
+    inv = Table([['Invoice', '', '', 'Pay Period Ending', _us_date(end)]],
                 colWidths=[82, 210, 40, 82, 126])
     inv.setStyle(TableStyle([('FONT', (0, 0), (-1, -1), 'Helvetica-Bold', 7.5),
                              ('LINEBELOW', (0, 0), (1, 0), .6, colors.black), ('LINEBELOW', (3, 0), (4, 0), .6, colors.black)]))
@@ -165,10 +163,8 @@ def make_pdf(rows, start, end, path, provider, badge, address='', phone='', bill
                 colWidths=[110, 210, 220], rowHeights=[26, 12, 26, 12])
     sig.setStyle(TableStyle([('FONT', (0, 0), (-1, -1), 'Helvetica', 6.5),
                              ('LINEABOVE', (1, 1), (2, 1), .6, colors.grey), ('LINEABOVE', (1, 3), (2, 3), .6, colors.grey)]))
-    note = ParagraphStyle('n', fontName='Helvetica', fontSize=6.5)
     SimpleDocTemplate(str(path), pagesize=letter, leftMargin=36, rightMargin=36, topMargin=72, bottomMargin=36).build(
-        [top, Spacer(1, 10), info_t, Spacer(1, 12), inv, Spacer(1, 8), grid, Spacer(1, 14), sig, Spacer(1, 18),
-         Paragraph('DRAFT - Review scheduled versus actual hours before sending.', note)])
+        [top, Spacer(1, 10), info_t, Spacer(1, 12), inv, Spacer(1, 8), grid, Spacer(1, 14), sig])
 
 def col_letter(i):
     s = ''
