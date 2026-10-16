@@ -165,9 +165,9 @@ class TimesheetTests(unittest.TestCase):
     def test_shift_labels_and_rates(self):
         from invoice import timesheet_rows
         lines = timesheet_rows(self.rows(), date(2030, 1, 6), date(2030, 1, 19))
-        self.assertEqual(lines[1], ['Monday', '1/7/2030', '12AM - 7AM (Guam)', '7', '$10/HR', '$70.00'])
-        self.assertEqual(lines[2][2:], ['7PM - 12AM (Guam)', '5', '$12.50/HR', '$62.50'])
-        self.assertEqual(lines[3][2], '12AM - 7AM (Guam)')
+        self.assertEqual(lines[1], ['Monday', '1/7/2030', '12AM-7AM', '7', '$10/HR', '$70.00'])
+        self.assertEqual(lines[2][2:], ['7PM-12AM', '5', '$12.50/HR', '$62.50'])
+        self.assertEqual(lines[3][2], '12AM-7AM')
 
     def test_pdf_builds(self):
         import tempfile, os

@@ -1,6 +1,6 @@
 # GRMC invoice preparation
 
-Reads a shared hospitalist schedule in Google Sheets, selects the provider's Tele 1 / Tele 2 assignments for a closed two-week pay period, builds an invoice PDF in GRMC's "TIMESHEET (LIP) Independent Contractors" layout, and creates a Gmail draft with it attached. It **never sends email**; every draft is reviewed and sent by hand. The PDF is a draft layout, not a replica of any signed form.
+Reads a shared hospitalist schedule in Google Sheets, selects the provider's Tele 1 / Tele 2 assignments for a closed two-week pay period, builds an invoice PDF in GRMC's "TIMESHEET (LIP) Independent Contractors" layout, and creates a Gmail draft with it attached. It **never sends email**; every draft is reviewed and sent by hand. The PDF follows GRMC's unsigned timesheet form; the provider signs it before sending.
 
 This repository is public. It contains no personal data, rates history, or credentials: identity, recipient, and source spreadsheet come from GitHub Actions secrets, and run artifacts are not uploaded.
 
@@ -22,7 +22,7 @@ This repository is public. It contains no personal data, rates history, or crede
 - Tele 1 (19:00–24:00): 5 hours. Tele 2 (00:00–07:00): 7 hours. Hourly rates come from the `TELE1_RATE` / `TELE2_RATE` variables.
 - Pay periods are 14 days, Sunday–Saturday, anchored on the period ending October 3, 2026. A period counts as closed once its ending Saturday has passed in Guam.
 - Each Tele 2 shift is billed on its schedule row's date, including nights with both Tele 1 and Tele 2.
-- The PDF lists every day of the period, Sunday through Saturday, as Day / Date / Time / Hours / Rate / Total. Days without a shift stay blank; a night with both Tele 1 and Tele 2 gets two lines. Times read `7PM - 12AM (Guam)` and `12AM - 7AM (Guam)`.
+- The PDF lists every day of the period, Sunday through Saturday, as Day / Date / Time / Hours / Rate / Total. Days without a shift stay blank; a night with both Tele 1 and Tele 2 gets two lines. Times read `7PM-12AM` and `12AM-7AM` (Guam). The Invoice field, signatures and signature date are left blank for the provider to complete; the form carries no draft marking, so review it before sending.
 - No shifts means no invoice. Mixed or unrecognized assignments in a Tele cell, missing rates, and duplicate assignments stop the run for review.
 
 ## Income tracker (optional)
